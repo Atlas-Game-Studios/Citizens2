@@ -26,7 +26,7 @@ public class MCTargetStrategy implements PathStrategy, EntityTarget {
     private final NPC npc;
     private final NavigatorParameters parameters;
     private final Entity target;
-    private final TargetNavigator targetNavigator;
+    private TargetNavigator targetNavigator;
     private int updateCounter = -1;
 
     public MCTargetStrategy(NPC npc, org.bukkit.entity.Entity target, boolean aggro, NavigatorParameters params) {
@@ -34,8 +34,8 @@ public class MCTargetStrategy implements PathStrategy, EntityTarget {
         this.parameters = params;
         this.handle = npc.getEntity();
         this.target = target;
-        TargetNavigator nav = NMS.getTargetNavigator(npc.getEntity(), target, params);
-        this.targetNavigator = nav != null && !params.useNewPathfinder() ? nav : new AStarTargeter();
+        TargetNavigator nms = NMS.getTargetNavigator(npc.getEntity(), target, params);
+        this.targetNavigator = nms != null && !params.useNewPathfinder() ? nms : new AStarTargeter();
         this.aggro = aggro;
     }
 
@@ -114,6 +114,9 @@ public class MCTargetStrategy implements PathStrategy, EntityTarget {
         }
         if (cancelReason != null) {
             return true;
+        }
+        if (parameters.straightLineTargetingDistance() > 0 && !(targetNavigator instanceof StraightLineTargeter)) {
+            targetNavigator = new StraightLineTargeter(targetNavigator);
         }
         if (!aggro && distanceSquared() <= parameters.distanceMargin()) {
             stop();
@@ -195,6 +198,55 @@ public class MCTargetStrategy implements PathStrategy, EntityTarget {
         @Override
         public void update() {
             strategy.update();
+        }
+    }
+
+    private class StraightLineTargeter implements TargetNavigator {
+        private PathStrategy active;
+        private final TargetNavigator fallback;
+
+        public StraightLineTargeter(TargetNavigator navigator) {
+            fallback = navigator;
+        }
+
+        @Override
+        public Iterable<Vector> getPath() {
+            if (active != null) {
+                return active.getPath();
+            }
+            return fallback.getPath();
+        }
+
+        @Override
+        public void setPath() {
+            Location location = parameters.entityTargetLocationMapper().apply(target);
+            if (location == null) {
+                throw new IllegalStateException("mapper should not return null");
+            }
+            if (parameters.straightLineTargetingDistance() > 0) {
+                double distance = npc.getStoredLocation().distance(location);
+                if (distance < parameters.straightLineTargetingDistance()) {
+                    active = new StraightLineNavigationStrategy(npc, location, parameters);
+                    return;
+                }
+            }
+            active = null;
+        }
+
+        @Override
+        public void stop() {
+            if (active != null) {
+                active.stop();
+            }
+            fallback.stop();
+        }
+
+        @Override
+        public void update() {
+            if (active != null) {
+                active.update();
+            }
+            fallback.update();
         }
     }
 

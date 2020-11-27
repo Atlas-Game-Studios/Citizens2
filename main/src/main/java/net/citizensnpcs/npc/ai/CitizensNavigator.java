@@ -45,7 +45,8 @@ public class CitizensNavigator implements Navigator, Runnable {
             .distanceMargin(Setting.DEFAULT_DISTANCE_MARGIN.asDouble())
             .pathDistanceMargin(Setting.DEFAULT_PATH_DISTANCE_MARGIN.asDouble())
             .stationaryTicks(Setting.DEFAULT_STATIONARY_TICKS.asInt()).stuckAction(TeleportStuckAction.INSTANCE)
-            .examiner(new MinecraftBlockExaminer()).useNewPathfinder(Setting.USE_NEW_PATHFINDER.asBoolean());
+            .examiner(new MinecraftBlockExaminer()).useNewPathfinder(Setting.USE_NEW_PATHFINDER.asBoolean())
+            .straightLineTargetingDistance(Setting.DEFAULT_STRAIGHT_LINE_TARGETING_DISTANCE.asFloat());
     private PathStrategy executing;
     private int lastX, lastY, lastZ;
     private NavigatorParameters localParams = defaultParams;
@@ -215,6 +216,11 @@ public class CitizensNavigator implements Navigator, Runnable {
 
     @Override
     public void setTarget(Entity target, boolean aggressive) {
+        setTarget(target, aggressive, new MCTargetStrategy(npc, target, aggressive, localParams));
+    }
+
+    @Override
+    public void setTarget(Entity target, boolean aggressive, PathStrategy strategy) {
         if (!npc.isSpawned())
             throw new IllegalStateException("npc is not spawned");
         if (target == null) {
@@ -223,20 +229,13 @@ public class CitizensNavigator implements Navigator, Runnable {
         }
         switchParams();
         updatePathfindingRange();
-        PathStrategy newStrategy = new MCTargetStrategy(npc, target, aggressive, localParams);
-        switchStrategyTo(newStrategy);
+        switchStrategyTo(strategy);
     }
 
     @Override
     public void setTarget(Iterable<Vector> path) {
         if (!npc.isSpawned())
             throw new IllegalStateException("npc is not spawned");
-        if (path == null || Iterables.size(path) == 0) {
-            cancelNavigation();
-            return;
-        }
-        switchParams();
-        updatePathfindingRange();
         PathStrategy newStrategy;
         if (npc.isFlyable()) {
             newStrategy = new FlyingAStarNavigationStrategy(npc, path, localParams);
@@ -246,20 +245,26 @@ public class CitizensNavigator implements Navigator, Runnable {
         } else {
             newStrategy = new MCNavigationStrategy(npc, path, localParams);
         }
-        switchStrategyTo(newStrategy);
+        setTarget(path, newStrategy);
+    }
+
+    @Override
+    public void setTarget(Iterable<Vector> path, PathStrategy strategy) {
+        if (!npc.isSpawned())
+            throw new IllegalStateException("npc is not spawned");
+        if (path == null || Iterables.size(path) == 0) {
+            cancelNavigation();
+            return;
+        }
+        switchParams();
+        updatePathfindingRange();
+        switchStrategyTo(strategy);
     }
 
     @Override
     public void setTarget(Location target) {
         if (!npc.isSpawned())
             throw new IllegalStateException("npc is not spawned");
-        if (target == null) {
-            cancelNavigation();
-            return;
-        }
-        target = target.clone();
-        switchParams();
-        updatePathfindingRange();
         PathStrategy newStrategy;
         if (npc.isFlyable()) {
             newStrategy = new FlyingAStarNavigationStrategy(npc, target, localParams);
@@ -269,7 +274,21 @@ public class CitizensNavigator implements Navigator, Runnable {
         } else {
             newStrategy = new MCNavigationStrategy(npc, target, localParams);
         }
-        switchStrategyTo(newStrategy);
+        setTarget(target, newStrategy);
+    }
+
+    @Override
+    public void setTarget(Location target, PathStrategy strategy) {
+        if (!npc.isSpawned())
+            throw new IllegalStateException("npc is not spawned");
+        if (target == null) {
+            cancelNavigation();
+            return;
+        }
+        target = target.clone();
+        switchParams();
+        updatePathfindingRange();
+        switchStrategyTo(strategy);
     }
 
     private void stopNavigating() {

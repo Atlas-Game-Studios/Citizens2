@@ -263,6 +263,14 @@ public class EntityHumanNPC extends EntityPlayer implements NPCHolder, Skinnable
         return skinTracker;
     }
 
+    @Override
+    public boolean inBlock() {
+        if (npc == null || noclip || isSleeping()) {
+            return super.inBlock();
+        }
+        return Util.inBlock(getBukkitEntity());
+    }
+
     private void initialise(MinecraftServer minecraftServer) {
         Socket socket = new EmptySocket();
         NetworkManager conn = null;
