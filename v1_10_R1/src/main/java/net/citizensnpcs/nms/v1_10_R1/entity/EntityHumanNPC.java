@@ -317,7 +317,7 @@ public class EntityHumanNPC extends EntityPlayer implements NPCHolder, Skinnable
     @Override
     public void m() {
         super.m();
-        if (npc == null)
+        if (npc == null || !npc.shouldTick())
             return;
         if (updateCounter + 1 > Setting.PACKET_UPDATE_DELAY.asInt()) {
             updateEffects = true;
